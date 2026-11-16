@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>decoy-kit · Decoy files that alert on your own domain</title>
+<meta name="description" content="Free, open-source generator for inert decoy files: .env, kubeconfig, MCP config, git and npm credentials, SSH config and shell history. Runs in your browser; nothing is sent anywhere.">
+<link rel="canonical" href="https://falsetrailhq.github.io/decoy-kit/">
+<style>
+  :root {
+    --paper: #EDF0EF; --panel: #FFFFFF; --ink: #111D25; --muted: #56656D; --line: #CDD5D5;
+    --blaze: #D9431F; --blaze-soft: rgba(217, 67, 31, 0.10);
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #0F181D; --panel: #152128; --ink: #DCE4E5; --muted: #8FA0A6; --line: #26343B; --blaze: #FF6B45; --blaze-soft: rgba(255, 107, 69, 0.13); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.55 var(--sans); }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 64px; }
+  .eyebrow { font: 600 13px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--blaze); }
+  h1 { font-size: clamp(32px, 6vw, 48px); line-height: 1.1; margin: 8px 0 12px; }
+  .lede { color: var(--muted); font-size: 19px; margin: 0 0 28px; }
+  form { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 14px; }
+  label { font-weight: 600; }
+  input[type=text] { width: 100%; font: 18px var(--mono); padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); margin-top: 6px; }
+  .kinds { display: flex; flex-wrap: wrap; gap: 8px 16px; font: 15px var(--mono); }
+  .kinds label { font-weight: 400; }
+  button { font: 600 16px var(--sans); padding: 12px 18px; border: 0; border-radius: 6px; background: var(--blaze); color: #fff; cursor: pointer; justify-self: start; }
+  button.ghost { background: transparent; color: var(--blaze); border: 1px solid var(--blaze); padding: 6px 12px; font-size: 14px; }
+  .err { color: var(--blaze); font-weight: 600; min-height: 1em; margin: 0; }
+  .decoy { margin-top: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .decoy header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .decoy h3 { margin: 0; font: 600 16px var(--mono); }
+  .decoy .id { color: var(--blaze); }
+  .decoy p { margin: 10px 16px; font-size: 15px; color: var(--muted); }
+  .decoy pre { margin: 0; padding: 14px 16px; background: var(--blaze-soft); font: 13px/1.5 var(--mono); overflow-x: auto; white-space: pre; }
+  .note { margin-top: 32px; padding: 16px 20px; border-left: 3px solid var(--blaze); background: var(--panel); font-size: 15px; }
+  .note h2 { font-size: 17px; margin: 0 0 6px; }
+  footer { margin-top: 40px; font-size: 14px; color: var(--muted); }
+  a { color: var(--blaze); }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Open source · MIT · by FalseTrail</div>
+  <h1>decoy-kit</h1>
+  <p class="lede">Inert decoy files for the places intruders and AI agents look first: <code>.env</code>, kubeconfig, MCP config, git and npm credentials, SSH config and shell history. Each one points at a domain you control, with its own id, so the first request tells you which file was found. Everything runs in your browser; nothing is sent anywhere.</p>
+
+  <form id="f">
+    <div>
+      <label for="domain">Your decoy domain</label>
+      <input id="domain" type="text" placeholder="decoy.example.com" autocomplete="off" spellcheck="false" required>
+    </div>
+    <div class="kinds" id="kinds"></div>
+    <button type="submit">Generate decoys</button>
+    <p class="err" id="err" role="alert"></p>
+  </form>
+
+  <div id="out"></div>
+
+  <div class="note">
+    <h2>Before you plant anything</h2>
+    Point wildcard DNS (<code>*.decoy.example.com</code>) at a server whose logs you watch, for example <a href="https://github.com/falsetrailhq/decoy-kit#3-watch-for-hits">listener.mjs</a> from the repo. Keep the manifest off the systems you plant on. Only use decoys on systems you own or are authorised to test. The secrets are random strings with no real provider prefix, so they won't trip secret scanners or provider revocation.
+  </div>
+
+  <footer>
+    <a href="https://github.com/falsetrailhq/decoy-kit">Source on GitHub</a> ·
+    Placement ideas: <a href="https://falsetrail.com/guides/honeytoken-examples/">34 honeytoken examples mapped to ATT&amp;CK</a> ·
+    When one alert isn't enough: <a href="https://falsetrail.com/">FalseTrail</a> follows what the intruder does next.
+  </footer>
+</main>
+
+<script type="module">
+  import { generate, manifest, caddyfile, KIND_NAMES } from './generate.js';
+
+  const kinds = document.getElementById('kinds');
+  kinds.innerHTML = KIND_NAMES.map((k) => `<label><input type="checkbox" value="${k}" checked> ${k}</label>`).join('');
+
+  const download = (name, text) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  document.getElementById('f').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const err = document.getElementById('err');
+    const out = document.getElementById('out');
+    err.textContent = '';
+    try {
+      const domain = document.getElementById('domain').value;
+      const chosen = [...kinds.querySelectorAll('input:checked')].map((i) => i.value);
+      if (!chosen.length) throw new Error('Pick at least one decoy type.');
+      const decoys = generate({ domain, kinds: chosen });
+      const man = manifest(decoys, domain);
+      const caddy = caddyfile(decoys);
+      out.innerHTML = decoys.map((x, i) => `
+        <section class="decoy">
+          <header><h3>${esc(x.file)} <span class="id">${x.id}</span></h3>
+            <span><button class="ghost" data-copy="${i}">Copy</button> <button class="ghost" data-dl="${i}">Download</button></span></header>
+          <p><b>Plant in:</b> ${esc(x.suggested)}<br><b>Fires on:</b> ${esc(x.trigger)}</p>
+          <pre>${esc(x.body)}</pre>
+        </section>`).join('') + `
+        <section class="decoy">
+          <header><h3>MANIFEST.csv</h3><span><button class="ghost" data-man>Download</button></span></header>
+          <p>Which id is which file. Fill in where you planted each one and keep it off those systems.</p>
+          <pre>${esc(man)}</pre>
+        </section>` + (caddy ? `
+        <section class="decoy">
+          <header><h3>Caddyfile</h3><span><button class="ghost" data-caddy>Download</button></span></header>
+          <p>For your listener server: <code>DECOYS=./decoys docker compose up -d</code> gets a certificate for each hostname and forwards hits to the listener. Don't plant this one.</p>
+          <pre>${esc(caddy)}</pre>
+        </section>` : '');
+      out.onclick = (ev) => {
+        const b = ev.target.closest('button');
+        if (!b) return;
+        if (b.dataset.copy) navigator.clipboard?.writeText(decoys[b.dataset.copy].body).then(() => { b.textContent = 'Copied'; });
+        if (b.dataset.dl) download(decoys[b.dataset.dl].file, decoys[b.dataset.dl].body);
+        if ('man' in b.dataset) download('MANIFEST.csv', man);
+        if ('caddy' in b.dataset) download('Caddyfile', caddy);
+      };
+    } catch (ex) {
+      out.innerHTML = '';
+      err.textContent = ex.message;
+    }
+  });
+</script>
+</body>
+</html>

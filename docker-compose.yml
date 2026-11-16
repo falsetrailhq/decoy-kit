@@ -1,0 +1,32 @@
+# decoy-kit listener server: Caddy terminates TLS for every decoy hostname
+# (certificates from Let's Encrypt, obtained automatically) and forwards to listener.mjs.
+#
+#   node cli.mjs --domain decoy.example.com --out ./decoys
+#   DECOYS=./decoys WEBHOOK_URL=https://hooks.slack.com/services/... docker compose up -d
+#   docker compose logs -f listener
+services:
+  listener:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./listener.mjs:/app/listener.mjs:ro
+    command: ["node", "/app/listener.mjs"]
+    environment:
+      PORT: "8080"
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${DECOYS:-./decoys}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - listener
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

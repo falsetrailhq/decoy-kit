@@ -1,0 +1,13 @@
+{
+  "name": "decoy-kit",
+  "version": "0.1.0",
+  "description": "Inert decoy files (.env, kubeconfig, MCP config, git and npm credentials, SSH config) that alert on a domain you control.",
+  "type": "module",
+  "bin": { "decoy-kit": "cli.mjs" },
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=20" },
+  "license": "MIT",
+  "private": true,
+  "homepage": "https://falsetrailhq.github.io/decoy-kit/",
+  "repository": "github:falsetrailhq/decoy-kit"
+}
