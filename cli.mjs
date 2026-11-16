@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// decoy-kit CLI: node cli.mjs --domain decoy.example.com [--out ./decoys] [--kinds env,mcp]
+// decoy-kit CLI: node cli.mjs --domain decoy.example.com [--out ./decoys] [--kinds env,mcp] [--wildcard]
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { generate, manifest, caddyfile, KIND_NAMES } from './generate.js';
+import { generate, manifest, caddyfile, wildcardCaddyfile, KIND_NAMES } from './generate.js';
 
 const args = process.argv.slice(2);
 const opt = (name) => {
@@ -14,10 +14,13 @@ if (args.includes('-h') || args.includes('--help') || !opt('domain')) {
   console.log(`decoy-kit: inert decoy files that alert on a domain you control
 
 Usage:
-  node cli.mjs --domain decoy.example.com [--out ./decoys] [--kinds ${KIND_NAMES.join(',')}]
+  node cli.mjs --domain decoy.example.com [--out ./decoys] [--kinds ${KIND_NAMES.join(',')}] [--wildcard]
 
 The domain must be yours, with wildcard DNS (*.decoy.example.com) pointing at a
 server whose logs you watch, e.g. listener.mjs from this repo.
+--wildcard writes a Caddyfile with one wildcard certificate (Cloudflare DNS
+challenge), which keeps decoy ids out of certificate transparency logs.
+
 Only plant decoys on systems you own or are authorised to test.`);
   process.exit(opt('domain') ? 0 : 1);
 }
@@ -32,12 +35,15 @@ try {
   mkdirSync(out, { recursive: true });
   for (const x of decoys) writeFileSync(join(out, x.file), x.body);
   writeFileSync(join(out, 'MANIFEST.csv'), manifest(decoys, domain));
-  const caddy = caddyfile(decoys);
+  const wildcard = args.includes('--wildcard');
+  const caddy = wildcard ? wildcardCaddyfile(domain) : caddyfile(decoys);
   if (caddy) writeFileSync(join(out, 'Caddyfile'), caddy);
 
   console.log(`Wrote ${decoys.length} decoys to ${out}/\n`);
   for (const x of decoys) console.log(`  ${x.id}  ${x.file.padEnd(28)} ${x.suggested}`);
-  console.log(`\nMove MANIFEST.csv somewhere safe, off the systems you plant on.\nCaddyfile is for the listener server: DECOYS=${out} docker compose up -d`);
+  console.log(`\nMove MANIFEST.csv somewhere safe, off the systems you plant on.\nCaddyfile is for the listener server: ${wildcard
+    ? `DECOYS=${out} CF_API_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.wildcard.yml up -d`
+    : `DECOYS=${out} docker compose up -d`}`);
 } catch (err) {
   console.error(`decoy-kit: ${err.message}`);
   process.exit(1);

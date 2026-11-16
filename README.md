@@ -22,7 +22,7 @@ node cli.mjs --domain decoy.example.com --out ./decoys
 # 3. Start the listener server (certificates are obtained automatically)
 DECOYS=./decoys WEBHOOK_URL=https://hooks.slack.com/services/... docker compose up -d
 # 4. Test one decoy, then plant the files
-curl -s https://api-<id>.decoy.example.com/ ; docker compose logs listener
+curl -s -H "Authorization: Bearer test" https://api-<id>.decoy.example.com/ ; docker compose logs listener
 ```
 
 ## Why
@@ -78,15 +78,24 @@ WEBHOOK_URL=https://hooks.slack.com/services/... PORT=8080 node listener.mjs
 TLS_CERT=fullchain.pem TLS_KEY=privkey.pem PORT=443 node listener.mjs
 ```
 
-Every request is logged as one JSON line (time, decoy id, host, method, path, source IP, user agent, whether an Authorization header was sent) and answered with an empty `401` Basic challenge, so git, npm and similar clients retry with the planted credential. With `WEBHOOK_URL` set, it also posts `{"text": "..."}`, which Slack, Mattermost and most chat webhooks accept. Ship the log to your SIEM like any other.
+Every request is logged as one JSON line (time, decoy id, host, method, path, source IP, user agent, whether an Authorization header was sent, and a `confidence`) and answered with an empty `401` Basic challenge, so git, npm and similar clients retry with the planted credential. With `WEBHOOK_URL` set, it also posts `{"text": "..."}`, which Slack, Mattermost and most chat webhooks accept.
+
+`confidence` is `high` when the request names a decoy id and carries a credential or is not a plain `GET`/`HEAD`: that is what a client set up from a decoy sends (kubectl, git, npm, an MCP client, the `curl` in the history line). A bare `GET` is `low`, usually a scanner or a link checker. Only `high` events go to the webhook; set `ALERT_ALL=1` to post everything. Every event is logged either way. Ship the log to your SIEM like any other.
 
 If you run the listener without Compose, put it behind a reverse proxy that terminates TLS and forwards `X-Forwarded-For`, or give it a wildcard certificate. Some triggers (the SSH snippet, a database URL that is only resolved) produce only a DNS lookup; to see those, enable query logging on the authoritative DNS for your decoy domain.
 
-**Certificate transparency noise.** Every certificate a public CA issues is published in CT logs, and internet scanners watch those logs and probe new hostnames within minutes. With one certificate per decoy hostname (the Compose setup), expect a few requests from scanners soon after the certificates are issued and whenever they renew. They usually ask for `/` with no `Authorization` header from a hosting provider address. A request that carries a credential, or asks for the exact path written in the decoy, is a real trigger. To avoid the noise entirely, use one wildcard certificate (`*.decoy.example.com`, issued with a DNS challenge), which shows only the wildcard in CT logs, not the decoy ids.
+**Certificate transparency noise.** Every certificate a public CA issues is published in CT logs, and internet scanners watch those logs and probe new hostnames within minutes. With one certificate per decoy hostname (the Compose setup), expect a few requests from scanners soon after the certificates are issued and whenever they renew. They usually ask for `/` with no `Authorization` header from a hosting provider address. A request that carries a credential, or asks for the exact path written in the decoy, is a real trigger. The `confidence` field keeps them out of the webhook. To keep the decoy hostnames out of CT logs entirely, use wildcard mode: one `*.decoy.example.com` certificate, issued with a DNS challenge, so the logs show only the wildcard. It also covers decoys you add later without a new Caddyfile. It needs your decoy domain's DNS on Cloudflare and an API token with Zone / DNS / Edit on that zone only:
+
+```sh
+node cli.mjs --domain decoy.example.com --out ./decoys --wildcard
+DECOYS=./decoys CF_API_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.wildcard.yml up -d
+```
+
+For another DNS provider, swap the module in `caddy-cloudflare.Dockerfile` and the `dns` line in the Caddyfile for one from [caddy-dns](https://github.com/caddy-dns).
 
 ### 4. Plant and test
 
-Copy each file to its place, then trigger one yourself (`curl https://api-<id>.<your-domain>/`) and confirm the alert arrives. A decoy that silently stops alerting is worse than none.
+Copy each file to its place, then trigger one yourself (`curl -H "Authorization: Bearer test" https://api-<id>.<your-domain>/`) and confirm the alert arrives. A decoy that silently stops alerting is worse than none.
 
 ## Safety
 

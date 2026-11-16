@@ -166,3 +166,10 @@ export function caddyfile(decoys, upstream = 'listener:8080') {
   if (!hosts.length) return '';
   return `# decoy-kit: generated for ${hosts.length} decoy hostnames. Regenerate when you add decoys.\n${hosts.join(', ')} {\n\treverse_proxy ${upstream}\n}\n`;
 }
+
+// A Caddyfile with one wildcard certificate (DNS challenge through Cloudflare), so certificate
+// transparency logs show only *.domain and never the decoy ids. Covers decoys added later too.
+export function wildcardCaddyfile(domain, upstream = 'listener:8080') {
+  const d = checkDomain(domain);
+  return `# decoy-kit: one wildcard certificate for *.${d}; decoy ids stay out of certificate transparency logs.\n*.${d} {\n\ttls {\n\t\tdns cloudflare {env.CF_API_TOKEN}\n\t}\n\treverse_proxy ${upstream}\n}\n`;
+}

@@ -20,4 +20,19 @@ test('listener logs the decoy id from the Host header and answers 401', async (t
   assert.equal(lines[0].id, '8b70a0e9');
   assert.equal(lines[0].path, '/v2/users');
   assert.equal(lines[0].authorization, 'present');
+  assert.equal(lines[0].confidence, 'high');
+});
+
+test('a bare GET without a credential is low confidence', async (t) => {
+  const lines = [];
+  t.mock.method(console, 'log', (line) => lines.push(JSON.parse(line)));
+  const server = http.createServer(handler).listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  const { port } = server.address();
+  await new Promise((resolve, reject) => {
+    http.get({ port, host: '127.0.0.1', path: '/', headers: { host: 'api-8b70a0e9.decoy.example.com' } },
+      (r) => { r.resume(); resolve(); }).on('error', reject);
+  });
+  server.close();
+  assert.equal(lines[0].confidence, 'low');
 });

@@ -4,6 +4,7 @@
 //
 //   PORT=8080 node listener.mjs
 //   WEBHOOK_URL=https://hooks.slack.com/services/... node listener.mjs
+//   ALERT_ALL=1 WEBHOOK_URL=... node listener.mjs   (also post low-confidence requests)
 //   TLS_CERT=fullchain.pem TLS_KEY=privkey.pem PORT=443 node listener.mjs
 //
 // Every response is a 401 Basic challenge with no body. Nothing a decoy sends is stored except
@@ -15,10 +16,11 @@ import { pathToFileURL } from 'node:url';
 
 const PORT = Number(process.env.PORT || 8080);
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const ALERT_ALL = process.env.ALERT_ALL === '1';
 const ID_RE = /^[a-z0-9]+-([0-9a-f]{8})\./;
 
 async function alert(event) {
-  if (!WEBHOOK_URL) return;
+  if (!WEBHOOK_URL || (event.confidence !== 'high' && !ALERT_ALL)) return;
   const text = `decoy-kit: decoy ${event.id ?? '(unknown id)'} used. ${event.method} ${event.host}${event.path} from ${event.ip}`;
   try {
     await fetch(WEBHOOK_URL, {
@@ -43,6 +45,9 @@ function handler(req, res) {
     userAgent: req.headers['user-agent'] ?? null,
     authorization: req.headers.authorization ? 'present' : 'absent',
   };
+  // high: the request carries a credential or is not a plain GET/HEAD, which is what a client set up
+  // from a decoy sends. low: a bare GET, usually an internet scanner or a link checker.
+  event.confidence = event.id && (req.headers.authorization || !['GET', 'HEAD'].includes(req.method)) ? 'high' : 'low';
   console.log(JSON.stringify(event));
   alert(event);
   // The Basic challenge makes git, npm and similar clients retry with the planted credential,

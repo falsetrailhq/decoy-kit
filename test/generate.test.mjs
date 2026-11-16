@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generate, manifest, caddyfile, checkDomain, KIND_NAMES } from '../generate.js';
+import { generate, manifest, caddyfile, wildcardCaddyfile, checkDomain, KIND_NAMES } from '../generate.js';
 
 const D = 'decoy.example.com';
 
@@ -50,4 +50,12 @@ test('caddyfile covers every HTTPS hostname and nothing else', () => {
   assert.doesNotMatch(cf, /bastion-|db-/);
   assert.match(cf, /reverse_proxy listener:8080/);
   assert.equal(caddyfile(generate({ domain: D, kinds: ['ssh'] })), '');
+});
+
+test('wildcard caddyfile names only the wildcard, never a decoy id', () => {
+  const cf = wildcardCaddyfile('Decoy.Example.com.');
+  assert.match(cf, /^\*\.decoy\.example\.com \{$/m);
+  assert.match(cf, /dns cloudflare \{env\.CF_API_TOKEN\}/);
+  assert.doesNotMatch(cf, /[0-9a-f]{8}\./);
+  assert.throws(() => wildcardCaddyfile('nope'));
 });

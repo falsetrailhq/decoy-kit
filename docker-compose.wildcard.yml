@@ -1,0 +1,15 @@
+# Wildcard certificate mode: one *.decoy.example.com certificate through a Cloudflare DNS challenge,
+# so certificate transparency logs never list the decoy hostnames and scanners can't find them.
+#
+#   node cli.mjs --domain decoy.example.com --out ./decoys --wildcard
+#   DECOYS=./decoys CF_API_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.wildcard.yml up -d
+#
+# CF_API_TOKEN: a Cloudflare API token with Zone / DNS / Edit on the decoy domain's zone only.
+services:
+  caddy:
+    image: decoy-kit-caddy-cloudflare
+    build:
+      context: .
+      dockerfile: caddy-cloudflare.Dockerfile
+    environment:
+      CF_API_TOKEN: ${CF_API_TOKEN:?set CF_API_TOKEN}
