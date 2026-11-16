@@ -78,9 +78,11 @@ WEBHOOK_URL=https://hooks.slack.com/services/... PORT=8080 node listener.mjs
 TLS_CERT=fullchain.pem TLS_KEY=privkey.pem PORT=443 node listener.mjs
 ```
 
-Every request is logged as one JSON line (time, decoy id, host, method, path, source IP, user agent, whether an Authorization header was sent) and answered with an empty `401`. With `WEBHOOK_URL` set, it also posts `{"text": "..."}`, which Slack, Mattermost and most chat webhooks accept. Ship the log to your SIEM like any other.
+Every request is logged as one JSON line (time, decoy id, host, method, path, source IP, user agent, whether an Authorization header was sent) and answered with an empty `401` Basic challenge, so git, npm and similar clients retry with the planted credential. With `WEBHOOK_URL` set, it also posts `{"text": "..."}`, which Slack, Mattermost and most chat webhooks accept. Ship the log to your SIEM like any other.
 
 If you run the listener without Compose, put it behind a reverse proxy that terminates TLS and forwards `X-Forwarded-For`, or give it a wildcard certificate. Some triggers (the SSH snippet, a database URL that is only resolved) produce only a DNS lookup; to see those, enable query logging on the authoritative DNS for your decoy domain.
+
+**Certificate transparency noise.** Every certificate a public CA issues is published in CT logs, and internet scanners watch those logs and probe new hostnames within minutes. With one certificate per decoy hostname (the Compose setup), expect a few requests from scanners soon after the certificates are issued and whenever they renew. They usually ask for `/` with no `Authorization` header from a hosting provider address. A request that carries a credential, or asks for the exact path written in the decoy, is a real trigger. To avoid the noise entirely, use one wildcard certificate (`*.decoy.example.com`, issued with a DNS challenge), which shows only the wildcard in CT logs, not the decoy ids.
 
 ### 4. Plant and test
 

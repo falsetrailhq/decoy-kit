@@ -6,7 +6,7 @@
 //   WEBHOOK_URL=https://hooks.slack.com/services/... node listener.mjs
 //   TLS_CERT=fullchain.pem TLS_KEY=privkey.pem PORT=443 node listener.mjs
 //
-// Every response is a 401 with no body. Nothing a decoy sends is stored except
+// Every response is a 401 Basic challenge with no body. Nothing a decoy sends is stored except
 // the request line, headers and source address.
 import http from 'node:http';
 import https from 'node:https';
@@ -45,7 +45,9 @@ function handler(req, res) {
   };
   console.log(JSON.stringify(event));
   alert(event);
-  res.writeHead(401, { 'content-length': '0' });
+  // The Basic challenge makes git, npm and similar clients retry with the planted credential,
+  // so the second log line shows authorization: present.
+  res.writeHead(401, { 'www-authenticate': 'Basic realm="internal"', 'content-length': '0' });
   res.end();
 }
 
