@@ -36,3 +36,17 @@ test('a bare GET without a credential is low confidence', async (t) => {
   server.close();
   assert.equal(lines[0].confidence, 'low');
 });
+
+test('a POST without a credential is low confidence', async (t) => {
+  const lines = [];
+  t.mock.method(console, 'log', (line) => lines.push(JSON.parse(line)));
+  const server = http.createServer(handler).listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  const { port } = server.address();
+  await new Promise((resolve, reject) => {
+    http.request({ port, host: '127.0.0.1', method: 'POST', path: '/graphql', headers: { host: 'api-8b70a0e9.decoy.example.com' } },
+      (r) => { r.resume(); resolve(); }).on('error', reject).end('{}');
+  });
+  server.close();
+  assert.equal(lines[0].confidence, 'low');
+});

@@ -45,9 +45,10 @@ function handler(req, res) {
     userAgent: req.headers['user-agent'] ?? null,
     authorization: req.headers.authorization ? 'present' : 'absent',
   };
-  // high: the request carries a credential or is not a plain GET/HEAD, which is what a client set up
-  // from a decoy sends. low: a bare GET, usually an internet scanner or a link checker.
-  event.confidence = event.id && (req.headers.authorization || !['GET', 'HEAD'].includes(req.method)) ? 'high' : 'low';
+  // high: the request carries a credential, which every HTTPS decoy plants and a client set up from it
+  // sends (at the latest after the 401 challenge). low: no credential, usually an internet scanner
+  // or a link checker, whatever the method (scanners also POST to /graphql and similar).
+  event.confidence = event.id && req.headers.authorization ? 'high' : 'low';
   console.log(JSON.stringify(event));
   alert(event);
   // The Basic challenge makes git, npm and similar clients retry with the planted credential,
